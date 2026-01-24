@@ -1,0 +1,82 @@
+# Observer-Eye Platform - Grafana Dashboards Provisioning
+# Automatically provisions dashboards for comprehensive monitoring
+
+apiVersion: 1
+
+providers:
+  # Observer-Eye Service Dashboards
+  - name: 'observer-eye-services'
+    orgId: 1
+    folder: 'Observer-Eye Services'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/services
+
+  # Infrastructure Dashboards
+  - name: 'infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/infrastructure
+
+  # Business Intelligence Dashboards
+  - name: 'business-intelligence'
+    orgId: 1
+    folder: 'Business Intelligence'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/bi
+
+  # Security Monitoring Dashboards
+  - name: 'security'
+    orgId: 1
+    folder: 'Security'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/security
+
+  # Deep System Monitoring Dashboards
+  - name: 'deep-system'
+    orgId: 1
+    folder: 'Deep System'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 15
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/deep-system
+
+  # Application Performance Monitoring
+  - name: 'apm'
+    orgId: 1
+    folder: 'APM'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/apm
+
+  # Executive Dashboards
+  - name: 'executive'
+    orgId: 1
+    folder: 'Executive'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 300
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/executive

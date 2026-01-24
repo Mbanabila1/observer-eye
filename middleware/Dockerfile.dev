@@ -1,0 +1,84 @@
+# Development Dockerfile for FastAPI Middleware
+# Optimized for fast development iteration with hot reload
+
+FROM python:3.11-slim
+
+# Set development arguments
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Install development dependencies including eBPF tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Build tools for development
+    build-essential \
+    gcc \
+    g++ \
+    # eBPF development tools (lightweight for dev)
+    libbpf-dev \
+    libelf-dev \
+    # System monitoring
+    procps \
+    htop \
+    # Network tools
+    libpcap-dev \
+    iproute2 \
+    net-tools \
+    # Database
+    libpq-dev \
+    # Development utilities
+    git \
+    curl \
+    vim \
+    # Debugging tools
+    gdb \
+    strace \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create development user
+RUN useradd --create-home --shell /bin/bash --uid 1001 devuser
+
+# Set working directory
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    # Install development tools
+    pip install --no-cache-dir \
+    black \
+    isort \
+    flake8 \
+    mypy \
+    ipdb \
+    pytest-cov \
+    pytest-xdist \
+    watchdog
+
+# Set development environment variables
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    FASTAPI_ENV=development \
+    FASTAPI_RELOAD=true \
+    LOG_LEVEL=DEBUG \
+    EBPF_DEBUG=true \
+    EBPF_MOCK_MODE=true
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/data /app/tmp && \
+    chown -R devuser:devuser /app
+
+# Switch to development user
+USER devuser
+
+# Expose port
+EXPOSE 8000
+
+# Development command with hot reload
+CMD ["uvicorn", "main:mymiddleware", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--reload", \
+     "--log-level", "debug"]

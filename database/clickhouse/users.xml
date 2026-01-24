@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<!-- Observer-Eye Platform - ClickHouse Users Configuration -->
+<clickhouse>
+    <users>
+        <!-- Default user -->
+        <default>
+            <password></password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <databases>
+                <database>warehouse</database>
+            </databases>
+        </default>
+
+        <!-- Analytics user for BI operations -->
+        <analytics>
+            <password>analytics_pass</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>analytics</profile>
+            <quota>default</quota>
+            <databases>
+                <database>warehouse</database>
+                <database>system</database>
+            </databases>
+            <access_management>1</access_management>
+        </analytics>
+
+        <!-- Read-only user for reporting -->
+        <readonly_user>
+            <password>readonly_pass</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>readonly</profile>
+            <quota>default</quota>
+            <databases>
+                <database>warehouse</database>
+            </databases>
+        </readonly_user>
+
+        <!-- Admin user for maintenance -->
+        <admin>
+            <password>admin_pass_change_in_production</password>
+            <networks>
+                <ip>::/0</ip>
+            </networks>
+            <profile>default</profile>
+            <quota>default</quota>
+            <access_management>1</access_management>
+            <named_collection_control>1</named_collection_control>
+            <show_named_collections>1</show_named_collections>
+            <show_named_collections_secrets>1</show_named_collections_secrets>
+        </admin>
+    </users>
+
+    <!-- Profiles -->
+    <profiles>
+        <default>
+            <max_memory_usage>10000000000</max_memory_usage>
+            <use_uncompressed_cache>0</use_uncompressed_cache>
+            <load_balancing>random</load_balancing>
+            <max_execution_time>300</max_execution_time>
+        </default>
+
+        <readonly>
+            <readonly>1</readonly>
+            <max_memory_usage>5000000000</max_memory_usage>
+            <max_execution_time>180</max_execution_time>
+        </readonly>
+
+        <analytics>
+            <max_memory_usage>20000000000</max_memory_usage>
+            <max_execution_time>600</max_execution_time>
+            <max_query_size>2147483648</max_query_size>
+            <allow_experimental_window_functions>1</allow_experimental_window_functions>
+            <allow_experimental_projection_optimization>1</allow_experimental_projection_optimization>
+            <allow_experimental_analyzer>1</allow_experimental_analyzer>
+        </analytics>
+    </profiles>
+
+    <!-- Quotas -->
+    <quotas>
+        <default>
+            <interval>
+                <duration>3600</duration>
+                <queries>0</queries>
+                <errors>0</errors>
+                <result_rows>0</result_rows>
+                <read_rows>0</read_rows>
+                <execution_time>0</execution_time>
+            </interval>
+        </default>
+
+        <analytics_quota>
+            <interval>
+                <duration>3600</duration>
+                <queries>1000</queries>
+                <errors>100</errors>
+                <result_rows>1000000000</result_rows>
+                <read_rows>10000000000</read_rows>
+                <execution_time>3600</execution_time>
+            </interval>
+        </analytics_quota>
+    </quotas>
+</clickhouse>

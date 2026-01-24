@@ -1,0 +1,98 @@
+# Observer-Eye Platform - Root .dockerignore
+# Global exclusions for Docker build context optimization
+
+# Version Control
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+docs/
+documentation/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Docker Files (avoid recursive inclusion)
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Environment Files (security)
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime Data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage and Test Results
+coverage/
+.nyc_output/
+.coverage
+htmlcov/
+.pytest_cache/
+test-results/
+junit.xml
+
+# Temporary Files
+tmp/
+temp/
+.tmp/
+
+# Build Artifacts (will be built in container)
+dist/
+build/
+out/
+
+# Backup Files
+*.bak
+*.backup
+*.old
+
+# Kubernetes and Deployment
+k8s/
+kubernetes/
+helm/
+*.yaml
+*.yml
+!docker-compose*.yml
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+Jenkinsfile
+
+# Security Scanning
+.snyk
+.trivyignore
+
+# Performance and Profiling
+*.prof
+*.pprof

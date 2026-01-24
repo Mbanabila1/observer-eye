@@ -1,0 +1,60 @@
+# Development Dockerfile for Angular Dashboard
+# Observer-Eye Observability Platform - Development Environment
+# Optimized for hot-reload and development workflow
+
+FROM node:20-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies for 3D visualization development
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    musl-dev \
+    giflib-dev \
+    pixman-dev \
+    pangomm-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    git
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm ci --silent
+
+# Copy source code
+COPY . .
+
+# Create non-root user for development
+RUN addgroup -g 1001 -S node-dev && \
+    adduser -S -D -H -u 1001 -h /app -s /bin/sh -G node-dev -g node-dev node-dev && \
+    chown -R node-dev:node-dev /app
+
+
+RUN  rm -rf /usr/share/nginx/html/*
+
+
+# Switch to non-root user
+USER node-dev
+
+# Expose development server port
+EXPOSE 4200
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:4200 || exit 1
+
+# Labels
+LABEL maintainer="Observer-Eye Platform Team"
+LABEL version="1.0.0-dev"
+LABEL description="Angular Dashboard Development Environment"
+
+# Start development server with hot reload
+CMD ["npm", "start", "--", "--host", "0.0.0.0", "--port", "4200", "--poll", "2000"]

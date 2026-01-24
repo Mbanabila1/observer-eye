@@ -1,0 +1,534 @@
+# Observer-Eye Observability Platform - Production Environment
+# This configuration follows the Internet → Dashboards → Middleware → Backend flow
+# Optimized for production deployment with security hardening and resource limits
+
+
+networks:
+  observer-eye-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+  monitoring-network:
+    driver: bridge
+    internal: true
+
+services:
+  # Tier 1: Entry Point (Internet-Facing)
+  nginx:
+    image: nginx:alpine
+    container_name: observer-eye-nginx-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/ssl/certs:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - observer-eye-network
+    depends_on:
+      - frontend
+      - middleware
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Frontend Container: Angular application with 3D visualization and BI reporting
+  frontend:
+    build:
+      context: ./dashboards
+      dockerfile: Dockerfile
+    container_name: observer-eye-frontend-prod
+    environment:
+      - NODE_ENV=production
+      - API_BASE_URL=${API_BASE_URL}
+      - WS_BASE_URL=${WS_BASE_URL}
+    networks:
+      - observer-eye-network
+    depends_on:
+      - middleware
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Tier 2: Processing Layer (Dashboard-to-Middleware)
+  # Middleware Container: FastAPI service with real-time processing and analytics
+  middleware:
+    build:
+      context: ./middleware
+      dockerfile: Dockerfile
+    container_name: observer-eye-middleware-prod
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=${DATABASE_URL}
+      - ANALYTICS_URL=http://bi-analytics:8002
+      - REDIS_URL=${REDIS_URL}
+      - DEEP_SYSTEM_URL=http://deep-system:8003
+      - WAREHOUSE_URL=${WAREHOUSE_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+    networks:
+      - observer-eye-network
+    depends_on:
+      - postgres
+      - redis
+      - deep-system
+      - bi-analytics
+      - auth-service
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Authentication Container: Dedicated authentication and authorization service
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: observer-eye-auth-prod
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ALGORITHM=HS256
+      - JWT_EXPIRATION_HOURS=24
+      - MFA_SECRET_KEY=${MFA_SECRET_KEY}
+    networks:
+      - observer-eye-network
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Tier 3: Data and Analytics Layer (Middleware-to-Backend)
+  # Backend Container: Django application with observability domain apps
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: observer-eye-backend-prod
+    environment:
+      - DJANGO_SETTINGS_MODULE=infra.settings.production
+      - DATABASE_URL=${DATABASE_URL}
+      - WAREHOUSE_URL=${WAREHOUSE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - TIMESCALE_URL=${TIMESCALE_URL}
+      - SECRET_KEY=${DJANGO_SECRET_KEY}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS}
+    networks:
+      - observer-eye-network
+    depends_on:
+      - postgres
+      - clickhouse
+      - timescaledb
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "check", "--deploy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # BI Analytics Container: Business intelligence processing and report generation
+  bi-analytics:
+    build:
+      context: ./bi-analytics
+      dockerfile: Dockerfile
+    container_name: observer-eye-bi-analytics-prod
+    environment:
+      - ENVIRONMENT=production
+      - WAREHOUSE_URL=${WAREHOUSE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - POSTGRES_URL=${DATABASE_URL}
+      - ML_MODEL_PATH=/app/models
+    networks:
+      - observer-eye-network
+    depends_on:
+      - clickhouse
+      - redis
+      - postgres
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '3.0'
+          memory: 8G
+        reservations:
+          cpus: '1.5'
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Deep System Container: eBPF-based kernel monitoring and payload inspection
+  deep-system:
+    build:
+      context: ./deep-system
+      dockerfile: Dockerfile
+    container_name: observer-eye-deep-system-prod
+    privileged: true
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - /proc:/host/proc:ro
+      - /sys/fs/bpf:/sys/fs/bpf
+    environment:
+      - HOST_PROC=/host/proc
+      - ENVIRONMENT=production
+      - MIDDLEWARE_URL=http://middleware:8000
+      - LOG_LEVEL=INFO
+    networks:
+      - observer-eye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Tier 4: Storage Layer
+  # PostgreSQL - Operational Data
+  postgres:
+    image: postgres:15-alpine
+    container_name: observer-eye-postgres-prod
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres_backups:/backups
+    networks:
+      - observer-eye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ClickHouse - Analytics Data Warehouse
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: observer-eye-clickhouse-prod
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./database/clickhouse/config.prod.xml:/etc/clickhouse-server/config.xml:ro
+      - ./database/clickhouse/users.prod.xml:/etc/clickhouse-server/users.xml:ro
+      - clickhouse_backups:/backups
+    environment:
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
+    networks:
+      - observer-eye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 8G
+        reservations:
+          cpus: '2.0'
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis - Cache & Sessions
+  redis:
+    image: redis:7-alpine
+    container_name: observer-eye-redis-prod
+    volumes:
+      - redis_data:/data
+      - ./database/redis/redis.prod.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - observer-eye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # TimescaleDB - Time Series Data
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: observer-eye-timescaledb-prod
+    environment:
+      - POSTGRES_DB=${TIMESCALE_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./database/timescaledb/init:/docker-entrypoint-initdb.d:ro
+      - timescale_backups:/backups
+    networks:
+      - observer-eye-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${TIMESCALE_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Production Monitoring
+  # Grafana for Infrastructure Monitoring
+  grafana:
+    image: grafana/grafana:latest
+    container_name: observer-eye-grafana-prod
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_SECRET_KEY=${GRAFANA_SECRET_KEY}
+      - GF_DATABASE_TYPE=postgres
+      - GF_DATABASE_HOST=postgres:5432
+      - GF_DATABASE_NAME=${POSTGRES_DB}
+      - GF_DATABASE_USER=${POSTGRES_USER}
+      - GF_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - observer-eye-network
+      - monitoring-network
+    depends_on:
+      - prometheus
+      - postgres
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Prometheus for Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: observer-eye-prometheus-prod
+    volumes:
+      - prometheus_data:/prometheus
+      - ./monitoring/prometheus/prometheus.prod.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.retention.size=50GB'
+    networks:
+      - observer-eye-network
+      - monitoring-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  redis_data:
+    driver: local
+  timescale_data:
+    driver: local
+  grafana_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  postgres_backups:
+    driver: local
+  clickhouse_backups:
+    driver: local
+  timescale_backups:
+    driver: local
+  nginx_logs:
+    driver: local
+
+secrets:
+  jwt_secret:
+    external: true
+  postgres_password:
+    external: true
+  clickhouse_password:
+    external: true
+  grafana_admin_password:
+    external: true

@@ -1,0 +1,378 @@
+
+# Docker Compose configuration with comprehensive health checks
+# Demonstrates health check endpoints and monitoring for Observer-Eye platform
+
+services:
+  # Angular Dashboard with Health Check Endpoints
+  dashboard:
+    build:
+      context: ./dashboards
+      dockerfile: Dockerfile
+    container_name: observer-eye-dashboard
+    ports:
+      - "4200:80"
+    environment:
+      - NODE_ENV=production
+      - MIDDLEWARE_URL=http://middleware:8000
+      - BACKEND_URL=http://backend:8001
+      - BI_ANALYTICS_URL=http://bi-analytics:8002
+    
+    # Docker health check using the /health endpoint
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Depends on backend services for readiness
+    depends_on:
+      middleware:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    
+    # Networks
+    networks:
+      - observer-eye-network
+    
+    # Labels for monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`dashboard.observer-eye.local`)"
+      - "traefik.http.services.dashboard.loadbalancer.server.port=80"
+      - "traefik.http.services.dashboard.loadbalancer.healthcheck.path=/health"
+      - "traefik.http.services.dashboard.loadbalancer.healthcheck.interval=30s"
+
+  # FastAPI Middleware with Health Endpoints
+  middleware:
+    build:
+      context: ./middleware
+      dockerfile: Dockerfile
+    container_name: observer-eye-middleware
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/observability
+      - REDIS_URL=redis://redis:6379
+      - BACKEND_URL=http://backend:8001
+    
+    # Health check for middleware service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 45s
+      retries: 3
+    
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+    
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    
+    networks:
+      - observer-eye-network
+
+  # Django Backend with Health Endpoints
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: observer-eye-backend
+    ports:
+      - "8001:8001"
+    environment:
+      - DJANGO_SETTINGS_MODULE=infra.settings.production
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/observability
+      - REDIS_URL=redis://redis:6379
+    
+    # Health check for Django backend
+    healthcheck:
+      test: ["CMD", "python", "manage.py", "check", "--deploy"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    
+    restart: unless-stopped
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - observer-eye-network
+
+  # BI Analytics Service with Health Monitoring
+  bi-analytics:
+    build:
+      context: ./bi-analytics
+      dockerfile: Dockerfile
+    container_name: observer-eye-bi-analytics
+    ports:
+      - "8002:8002"
+    environment:
+      - ENVIRONMENT=production
+      - WAREHOUSE_URL=clickhouse://clickhouse:8123/warehouse
+      - REDIS_URL=redis://redis:6379
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 45s
+      retries: 3
+    
+    restart: unless-stopped
+    
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - observer-eye-network
+
+  # Deep System Monitoring Container
+  deep-system:
+    build:
+      context: ./deep-system
+      dockerfile: Dockerfile
+    container_name: observer-eye-deep-system
+    privileged: true
+    volumes:
+      - /sys/kernel/debug:/sys/kernel/debug:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 15s
+      start_period: 60s
+      retries: 3
+    
+    restart: unless-stopped
+    
+    networks:
+      - observer-eye-network
+
+  # PostgreSQL Database with Health Check
+  postgres:
+    image: postgres:15
+    container_name: observer-eye-postgres
+    environment:
+      - POSTGRES_DB=observability
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d observability"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    restart: unless-stopped
+    networks:
+      - observer-eye-network
+
+  # ClickHouse Data Warehouse with Health Check
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: observer-eye-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      - CLICKHOUSE_DB=warehouse
+      - CLICKHOUSE_USER=analytics
+      - CLICKHOUSE_PASSWORD=analytics_pass
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    restart: unless-stopped
+    networks:
+      - observer-eye-network
+
+  # Redis Cache with Health Check
+  redis:
+    image: redis:7-alpine
+    container_name: observer-eye-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    restart: unless-stopped
+    networks:
+      - observer-eye-network
+
+  # Nginx Load Balancer with Health Checks
+  nginx:
+    image: nginx:alpine
+    container_name: observer-eye-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/ssl/certs:ro
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    restart: unless-stopped
+    
+    depends_on:
+      dashboard:
+        condition: service_healthy
+      middleware:
+        condition: service_healthy
+    
+    networks:
+      - observer-eye-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: observer-eye-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    restart: unless-stopped
+    networks:
+      - observer-eye-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: observer-eye-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    
+    restart: unless-stopped
+    
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    
+    networks:
+      - observer-eye-network
+
+# Networks
+networks:
+  observer-eye-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Volumes
+volumes:
+  postgres_data:
+    driver: local
+  clickhouse_data:
+    driver: local
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

@@ -1,0 +1,305 @@
+# Observer-Eye Platform - Prometheus Alerting Rules
+# Comprehensive alerting for the observability platform
+
+groups:
+  - name: observer-eye-services
+    rules:
+      # Service Health Alerts
+      - alert: ServiceDown
+        expr: up{job=~"observer-eye-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Observer-Eye service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} on instance {{ $labels.instance }} has been down for more than 1 minute."
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{job=~"observer-eye-.*",status=~"5.."}[5m]) / rate(http_requests_total{job=~"observer-eye-.*"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High error rate detected for {{ $labels.job }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for service {{ $labels.job }} on instance {{ $labels.instance }}."
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=~"observer-eye-.*"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High response time for {{ $labels.job }}"
+          description: "95th percentile response time is {{ $value }}s for service {{ $labels.job }} on instance {{ $labels.instance }}."
+
+      # Memory and CPU Alerts
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes{name=~"observer-eye-.*"} / container_spec_memory_limit_bytes{name=~"observer-eye-.*"}) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High memory usage for {{ $labels.name }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} for container {{ $labels.name }}."
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name=~"observer-eye-.*"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High CPU usage for {{ $labels.name }}"
+          description: "CPU usage is {{ $value | humanizePercentage }} for container {{ $labels.name }}."
+
+  - name: observer-eye-infrastructure
+    rules:
+      # Database Alerts
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute."
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "PostgreSQL high connection usage"
+          description: "PostgreSQL connection usage is {{ $value | humanizePercentage }}."
+
+      - alert: ClickHouseDown
+        expr: up{job="clickhouse"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "ClickHouse is down"
+          description: "ClickHouse database has been down for more than 1 minute."
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: infrastructure
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache has been down for more than 1 minute."
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value | humanizePercentage }}."
+
+  - name: observer-eye-system
+    rules:
+      # System Resource Alerts
+      - alert: HostHighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Host high CPU usage"
+          description: "CPU usage is {{ $value }}% on host {{ $labels.instance }}."
+
+      - alert: HostHighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Host high memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }} on host {{ $labels.instance }}."
+
+      - alert: HostHighDiskUsage
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Host high disk usage"
+          description: "Disk usage is {{ $value | humanizePercentage }} on host {{ $labels.instance }} filesystem {{ $labels.mountpoint }}."
+
+      - alert: HostDiskIOHigh
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Host high disk I/O"
+          description: "Disk I/O utilization is {{ $value | humanizePercentage }} on host {{ $labels.instance }}."
+
+  - name: observer-eye-deep-system
+    rules:
+      # Deep System Monitoring Alerts
+      - alert: DeepSystemMonitorDown
+        expr: up{job="observer-eye-deep-system"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Deep system monitor is down"
+          description: "eBPF-based deep system monitoring has been down for more than 1 minute."
+
+      - alert: HighSystemCallRate
+        expr: rate(ebpf_syscalls_total[5m]) > 10000
+        for: 5m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "High system call rate detected"
+          description: "System call rate is {{ $value }} calls/sec on host {{ $labels.instance }}."
+
+      - alert: SuspiciousPayloadDetected
+        expr: increase(payload_threats_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Suspicious payload detected"
+          description: "{{ $value }} suspicious payloads detected in the last 5 minutes on host {{ $labels.instance }}."
+
+      - alert: KernelModuleLoadFailure
+        expr: increase(kernel_module_load_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: infrastructure
+        annotations:
+          summary: "Kernel module load failure"
+          description: "{{ $value }} kernel module load failures in the last 5 minutes on host {{ $labels.instance }}."
+
+  - name: observer-eye-business
+    rules:
+      # Business Logic Alerts
+      - alert: DataIngestionStopped
+        expr: rate(observability_data_ingested_total[5m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Data ingestion has stopped"
+          description: "No observability data has been ingested for more than 2 minutes."
+
+      - alert: LowDataQuality
+        expr: avg(data_quality_score) < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Low data quality detected"
+          description: "Average data quality score is {{ $value }} (below 0.8 threshold)."
+
+      - alert: HighCorrelationFailureRate
+        expr: rate(correlation_failures_total[5m]) / rate(correlation_attempts_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "High correlation failure rate"
+          description: "Correlation failure rate is {{ $value | humanizePercentage }}."
+
+      - alert: BIAnalyticsJobFailed
+        expr: increase(bi_job_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team: analytics
+        annotations:
+          summary: "BI analytics job failed"
+          description: "{{ $value }} BI analytics jobs failed in the last 5 minutes."
+
+  - name: observer-eye-security
+    rules:
+      # Security Alerts
+      - alert: AuthenticationFailureSpike
+        expr: rate(auth_failures_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Authentication failure spike"
+          description: "Authentication failure rate is {{ $value }} failures/sec."
+
+      - alert: UnauthorizedAccessAttempt
+        expr: increase(unauthorized_access_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: security
+        annotations:
+          summary: "Unauthorized access attempt detected"
+          description: "{{ $value }} unauthorized access attempts in the last 5 minutes from {{ $labels.source_ip }}."
+
+      - alert: SecurityScannerDown
+        expr: up{job="security-scanner"} == 0
+        for: 1m
+        labels:
+          severity: warning
+          team: security
+        annotations:
+          summary: "Security scanner is down"
+          description: "Security scanning service has been down for more than 1 minute."
+
+  - name: observer-eye-availability
+    rules:
+      # Availability and SLA Alerts
+      - alert: ServiceAvailabilityLow
+        expr: avg_over_time(up{job=~"observer-eye-.*"}[1h]) < 0.99
+        for: 0m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Service availability below SLA"
+          description: "Service {{ $labels.job }} availability is {{ $value | humanizePercentage }} (below 99% SLA)."
+
+      - alert: EndToEndLatencyHigh
+        expr: histogram_quantile(0.95, rate(end_to_end_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "End-to-end latency is high"
+          description: "95th percentile end-to-end latency is {{ $value }}s (above 5s threshold)."
+
+      - alert: DataLossDetected
+        expr: increase(data_loss_events_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Data loss detected"
+          description: "{{ $value }} data loss events detected in the last 5 minutes."

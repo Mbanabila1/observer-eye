@@ -1,0 +1,178 @@
+# Observer-Eye Platform - Grafana Datasources Configuration
+# Configures all data sources for comprehensive observability monitoring
+
+apiVersion: 1
+
+datasources:
+  # Prometheus - Metrics and Alerting
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      queryTimeout: "60s"
+      httpMethod: "POST"
+      manageAlerts: true
+      alertmanagerUid: "alertmanager"
+    version: 1
+
+  # PostgreSQL - Operational Data
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: postgres:5432
+    database: observability
+    user: observer
+    secureJsonData:
+      password: observer_pass
+    jsonData:
+      sslmode: "disable"
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+    editable: true
+    version: 1
+
+  # ClickHouse - Analytics Data Warehouse
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    url: http://clickhouse:8123
+    database: warehouse
+    user: analytics
+    secureJsonData:
+      password: analytics_pass
+    jsonData:
+      defaultDatabase: warehouse
+      dialTimeout: 10
+      queryTimeout: 60
+      idleTimeout: 60
+      debug: false
+    editable: true
+    version: 1
+
+  # TimescaleDB - Time Series Data
+  - name: TimescaleDB
+    type: postgres
+    access: proxy
+    url: timescaledb:5432
+    database: timeseries
+    user: observer
+    secureJsonData:
+      password: observer_pass
+    jsonData:
+      sslmode: "disable"
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: true
+    editable: true
+    version: 1
+
+  # Redis - Cache and Session Data (via Redis Datasource Plugin)
+  - name: Redis
+    type: redis-datasource
+    access: proxy
+    url: redis:6379
+    jsonData:
+      client: "standalone"
+      poolSize: 5
+      timeout: 10
+      pingInterval: 0
+      pipelineWindow: 0
+    editable: true
+    version: 1
+
+  # Loki - Log Aggregation (if using Loki)
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: "prometheus"
+          matcherRegex: "trace_id=(\\w+)"
+          name: "TraceID"
+          url: "$${__value.raw}"
+    editable: true
+    version: 1
+
+  # Jaeger - Distributed Tracing (if using Jaeger)
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    jsonData:
+      tracesToLogs:
+        datasourceUid: "loki"
+        tags: ["job", "instance", "pod", "namespace"]
+        mappedTags: [{"key": "service.name", "value": "service"}]
+        mapTagNamesEnabled: false
+        spanStartTimeShift: "1h"
+        spanEndTimeShift: "1h"
+        filterByTraceID: false
+        filterBySpanID: false
+    editable: true
+    version: 1
+
+  # Tempo - Distributed Tracing (alternative to Jaeger)
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      tracesToLogs:
+        datasourceUid: "loki"
+        tags: ["job", "instance"]
+        mappedTags: [{"key": "service.name", "value": "service"}]
+        mapTagNamesEnabled: false
+        spanStartTimeShift: "1h"
+        spanEndTimeShift: "1h"
+        filterByTraceID: false
+        filterBySpanID: false
+      serviceMap:
+        datasourceUid: "prometheus"
+      nodeGraph:
+        enabled: true
+    editable: true
+    version: 1
+
+  # TestData - For development and testing
+  - name: TestData
+    type: testdata
+    access: proxy
+    editable: true
+    version: 1
+
+  # Observer-Eye Custom Metrics API
+  - name: Observer-Eye-API
+    type: prometheus
+    access: proxy
+    url: http://middleware:8000/api/v1/metrics/prometheus
+    jsonData:
+      timeInterval: "30s"
+      queryTimeout: "30s"
+      httpMethod: "GET"
+      customQueryParameters: "format=prometheus"
+    basicAuth: false
+    withCredentials: false
+    editable: true
+    version: 1
+
+  # BI Analytics API
+  - name: BI-Analytics-API
+    type: simpod-json-datasource
+    access: proxy
+    url: http://bi-analytics:8002/api/v1/query
+    jsonData:
+      cacheDurationSeconds: 300
+      keepCookies: []
+    editable: true
+    version: 1

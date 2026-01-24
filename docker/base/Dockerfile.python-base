@@ -1,0 +1,72 @@
+# Observer-Eye Platform - Secure Python Base Image
+# Multi-stage build with security hardening for Python services
+
+# Build stage
+FROM python:3.11-slim as python-builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    make \
+    pkg-config \
+    libffi-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create build user
+RUN useradd --create-home --shell /bin/bash builder
+WORKDIR /build
+USER builder
+
+# Production stage
+FROM python:3.11-slim as python-production
+
+# Security hardening
+RUN apt-get update && apt-get install -y \
+    # Essential utilities
+    curl \
+    ca-certificates \
+    # Security tools
+    dumb-init \
+    # Cleanup
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean \
+    && rm -rf /tmp/* /var/tmp/*
+
+# Create non-root user for application
+RUN groupadd --gid 1000 observer \
+    && useradd --uid 1000 --gid observer --shell /bin/bash --create-home observer
+
+# Set up application directory
+WORKDIR /app
+RUN chown observer:observer /app
+
+# Security configurations
+# Remove unnecessary packages and files
+RUN apt-get autoremove -y \
+    && apt-get autoclean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/* \
+    && find /usr/lib/python*/site-packages/ -name "*.pyc" -delete \
+    && find /usr/lib/python*/site-packages/ -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+
+# Set security-focused environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=random \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app
+
+# Use dumb-init as PID 1 for proper signal handling
+ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+
+# Switch to non-root user
+USER observer
+
+# Health check template (to be overridden in specific services)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
