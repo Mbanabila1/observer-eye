@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+pytest
+numpy
+pandas
+httpx
+psycopg2-binary
