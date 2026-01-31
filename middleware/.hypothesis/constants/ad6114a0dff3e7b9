@@ -1,4 +1,0 @@
-# file: /home/mbanabila/Documents/kiro-projects/observer-eye/middleware/processors/__init__.py
-# hypothesis_version: 6.150.3
-
-['EventsProcessor', 'LogsProcessor', 'MetricsProcessor', 'ProcessingResult', 'TracesProcessor']

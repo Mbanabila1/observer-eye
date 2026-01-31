@@ -1,4 +1,0 @@
-# file: /home/mbanabila/Documents/kiro-projects/observer-eye/middleware/processors/base_processor.py
-# hypothesis_version: 6.150.3
-
-[0.0, 0.1, 0.8, 0.95, 1.0, 5.0, 1000, 10000, 'T', 'average_latency_ms', 'completed', 'complexity_score', 'correlated', 'correlation_strength', 'cpu_percent', 'data_size_bytes', 'degraded', 'events', 'failed', 'failed_processed', 'getloadavg', 'healthy', 'high', 'last_check', 'last_processing_time', 'load_avg_1m', 'logs', 'low', 'medium', 'memory_percent', 'metrics', 'pending', 'pillar_type', 'processing', 'processing_intensity', 'processor_id', 'processor_type', 'service_name', 'session_id', 'source', 'span_id', 'statistics', 'status', 'success_rate', 'successful_processed', 'system_impact', 'system_load', 'timestamp', 'timestamp_ns', 'total_processed', 'trace_id', 'traces', 'unhealthy', 'user_id']
