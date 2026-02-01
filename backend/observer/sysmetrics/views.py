@@ -1,3 +1,11 @@
-from django.shortcuts import render
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
 
-# Create your views here.
+@require_http_methods(["GET"])
+def placeholder_view(request):
+    """Placeholder view for sysmetrics app."""
+    return JsonResponse({
+        'app': 'sysmetrics',
+        'status': 'placeholder',
+        'message': 'sysmetrics endpoints will be implemented in future tasks'
+    })

@@ -3,7 +3,7 @@ plan to build observer-eye observability platform :
    1. presentation layer 
    2. logic layer 
    3. data layer 
-
+1.1. use  4 pillars of observability , metrics, events.logs.traces  and ensure its been use within platform
 
 2. deep dive technology stack for 3 layer with security best practices
 
@@ -11,7 +11,7 @@ plan to build observer-eye observability platform :
    1. presentation layer angular 21  port 80
    2. logic layer  middleware fastapi  port 8400 
    3. data layer backend django 
-   4. no mock data , no seed data , no sample data 
+   4. no mock data , no seed data , no sample data , no demo
 
    
 4. each layer : 

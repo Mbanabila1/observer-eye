@@ -1,0 +1,148 @@
+
+services:
+  # Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: observer-eye-postgres
+    environment:
+      POSTGRES_DB: observer_eye
+      POSTGRES_USER: observer_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-observer_password}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256 --auth-local=scram-sha-256"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - observer-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U observer_user -d observer_eye"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: observer-eye-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_password} --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - observer-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Django Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: observer-eye-backend
+    environment:
+      - DATABASE_URL=postgresql://observer_user:${POSTGRES_PASSWORD:-observer_password}@postgres:5432/observer_eye
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/0
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-your-secret-key-here}
+      - DJANGO_DEBUG=${DJANGO_DEBUG:-False}
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,middleware
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+    volumes:
+      - backend_logs:/app/logs
+      - backend_static:/app/staticfiles
+    ports:
+      - "8000:8000"
+    networks:
+      - observer-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health/', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # FastAPI Middleware
+  middleware:
+    build:
+      context: ./middleware
+      dockerfile: Dockerfile
+    container_name: observer-eye-middleware
+    environment:
+      - DATABASE_URL=postgresql://observer_user:${POSTGRES_PASSWORD:-observer_password}@postgres:5432/observer_eye
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password}@redis:6379/1
+      - DJANGO_BACKEND_URL=http://backend:8000
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    volumes:
+      - middleware_logs:/app/logs
+    ports:
+      - "8400:8400"
+    networks:
+      - observer-network
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8400/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Angular Frontend
+  frontend:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: observer-eye-frontend
+    environment:
+      - API_URL=http://middleware:8400
+    ports:
+      - "80:80"
+    networks:
+      - observer-network
+    depends_on:
+      middleware:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  backend_logs:
+    driver: local
+  backend_static:
+    driver: local
+  middleware_logs:
+    driver: local
+
+networks:
+  observer-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

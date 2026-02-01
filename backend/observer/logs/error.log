@@ -1,0 +1,7 @@
+ERROR 2026-02-01 09:29:51,326 log 44629 134243213017216 Internal Server Error: /api/v1/dashboards/templates/2d59d1cf-22d8-46a5-a0d7-0040007c1cb4/share/
+ERROR 2026-02-01 09:29:54,938 log 44629 134243213017216 Internal Server Error: /api/v1/dashboards/dashboards/create/
+ERROR 2026-02-01 09:29:59,663 log 44629 134243213017216 Internal Server Error: /api/v1/dashboards/dashboards/6725d01f-8e42-4a1d-93eb-0c358fa3962b/share/
+ERROR 2026-02-01 09:52:50,108 log 65902 138222894633088 Internal Server Error: /api/v1/dashboards/templates/eb8507cd-3322-4c57-95bc-56d037af5a39/version/
+ERROR 2026-02-01 09:53:42,717 log 66189 124765260886144 Internal Server Error: /api/v1/dashboards/templates/553169b6-368b-45c2-a98e-d42e061c5447/version/
+ERROR 2026-02-01 10:26:24,284 log 78711 131264049434752 Internal Server Error: /api/v1/integration/systems/
+ERROR 2026-02-01 10:26:24,299 log 78711 131264049434752 Internal Server Error: /api/v1/integration/systems/d3c00a55-7795-4e8a-9ebf-baee4f7620fa/

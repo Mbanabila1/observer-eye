@@ -1,0 +1,30 @@
+
+# Development overrides for docker-compose.yml
+services:
+  # Django Backend - Development
+  backend:
+    environment:
+      - DJANGO_DEBUG=True
+      - DJANGO_SETTINGS_MODULE=observer.settings
+      - LOG_LEVEL=debug
+    volumes:
+      - ./backend/observer:/app:ro
+      - backend_logs:/app/logs
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+  # FastAPI Middleware - Development
+  middleware:
+    environment:
+      - FASTAPI_ENV=development
+      - LOG_LEVEL=debug
+    volumes:
+      - ./middleware:/app:ro
+      - middleware_logs:/app/logs
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8400", "--reload", "--log-level", "debug"]
+
+  # Angular Frontend - Development
+  frontend:
+    volumes:
+      - ./dashboard/src:/app/src:ro
+    environment:
+      - NODE_ENV=development
